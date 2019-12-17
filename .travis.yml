@@ -25,6 +25,11 @@ notifications:
     on_success: never
     on_failure: change
 
+services:
+  - mysql
+before_install:
+  - mysql -e 'CREATE DATABASE myapp_test;'
+
 php:
   - 7.1
   - 7.2
