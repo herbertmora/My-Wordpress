@@ -1,99 +1,299 @@
-# My-Wordpress
+# Travis CI Nginx WordPress Test
 
-Quickstart: Compose and WordPress
-Estimated reading time: 3 minutes
-You can use Docker Compose to easily run WordPress in an isolated environment built with Docker containers. This quick-start guide demonstrates how to use Compose to set up and run WordPress. Before starting, make sure you have Compose installed.
+[![Latest Stable Version](https://poser.pugx.org/typisttech/travis-nginx-wordpress/v/stable)](https://packagist.org/packages/typisttech/travis-nginx-wordpress)
+[![Total Downloads](https://poser.pugx.org/typisttech/travis-nginx-wordpress/downloads)](https://packagist.org/packages/typisttech/travis-nginx-wordpress)
+[![Build Status](https://travis-ci.org/TypistTech/travis-nginx-wordpress.svg?branch=master)](https://travis-ci.org/TypistTech/travis-nginx-wordpress)
+[![PHP Versions Tested](http://php-eye.com/badge/typisttech/travis-nginx-wordpress/tested.svg)](https://travis-ci.org/TypistTech/travis-nginx-wordpress)
+[![License](https://poser.pugx.org/typisttech/travis-nginx-wordpress/license)](https://packagist.org/packages/typisttech/travis-nginx-wordpress)
+[![Hire Typist Tech](https://img.shields.io/badge/Hire-Typist%20Tech-ff69b4.svg)](https://typist.tech/contact/)
 
-Define the project
-Create an empty project directory.
+A basic template for Nginx and WordPress running on Travis CI's container based infrastructure. Prueba de cambios en integracion por Herbert Mora
 
-You can name the directory something easy for you to remember. This directory is the context for your application image. The directory should only contain resources to build that image.
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-This project directory contains a docker-compose.yml file which is complete in itself for a good starter wordpress project.
 
-Tip: You can use either a .yml or .yaml extension for this file. They both work.
+- [What is the purpose of this repo?](#what-is-the-purpose-of-this-repo)
+- [Installation and Usage](#installation-and-usage)
+- [Customization](#customization)
+- [How does it works?](#how-does-it-works)
+  - [WordPress](#wordpress)
+  - [Nginx](#nginx)
+  - [Codeception](#codeception)
+  - [Codecov.io](#codecovio)
+  - [Scrutinizer CI](#scrutinizer-ci)
+- [Known Issues](#known-issues)
+- [See Also](#see-also)
+- [Real life examples that use this package](#real-life-examples-that-use-this-package)
+- [Support!](#support)
+  - [Donate via PayPal *](#donate-via-paypal-)
+  - [Why don't you hire me?](#why-dont-you-hire-me)
+  - [Want to help in other way? Want to be a sponsor?](#want-to-help-in-other-way-want-to-be-a-sponsor)
+- [Change Log](#change-log)
+- [Credit](#credit)
+- [License](#license)
 
-Change into your project directory.
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-For example, if you named your directory my_wordpress:
+## What is the purpose of this repo?
 
-cd my_wordpress/
-Create a docker-compose.yml file that starts your WordPress blog and a separate MySQL instance with a volume mount for data persistence:
+Do you need to run some automated tests that rely on Nginx on Travis CI? Do you want those tests to run on the Docker
+[container-based infrastructure](http://blog.travis-ci.com/2014-12-17-faster-builds-with-container-based-infrastructure/)?
+Are you pulling your hair out trying to get this all to work? Then this repo is for you.
 
-version: '3.3'
+Travis CI does not come with Nginx pre-installed so the install needs to be scripted. Since Travis CI's container-based
+infrastructure doesn't allow sudo privileges this installation is non-trivial. Hopefully, by providing this repo
+I can save someone some hassle trying to get Nginx set up for their project.
+
+## Installation and Usage
+
+The script is tailored on Travis CI PHP build images and might not work in every situation. Below is an basic example of `.travis.yml`:
+
+```
+
+# .travis.yml
+language: php
 
 services:
-   db:
-     image: mysql:5.7
-     volumes:
-       - db_data:/var/lib/mysql
-     restart: always
-     environment:
-       MYSQL_ROOT_PASSWORD: somewordpress
-       MYSQL_DATABASE: wordpress
-       MYSQL_USER: wordpress
-       MYSQL_PASSWORD: wordpress
+  - mysql
 
-   wordpress:
-     depends_on:
-       - db
-     image: wordpress:latest
-     ports:
-       - "8000:80"
-     restart: always
-     environment:
-       WORDPRESS_DB_HOST: db:3306
-       WORDPRESS_DB_USER: wordpress
-       WORDPRESS_DB_PASSWORD: wordpress
-       WORDPRESS_DB_NAME: wordpress
-volumes:
-    db_data: {}
-Notes:
+cache:
+  apt: true
+  directories:
+    - $HOME/.composer/cache/files
 
-The docker volume db_data persists any updates made by WordPress to the database. Learn more about docker volumes
+addons:
+  apt:
+    packages:
+      - nginx
+    hosts:
+      - wp.dev
 
-WordPress Multisite works only on ports 80 and 443.
+php:
+  - 7.1
+  - 7.2
+  - nightly
 
-Build the project
-Now, run docker-compose up -d from your project directory.
+  env:
+    global:
+      - COMPOSER_NO_INTERACTION=1
+    matrix:
+      - WP_VERSION=nightly
+      - WP_VERSION=latest
+      - WP_VERSION=4.9.3
+      - WP_VERSION=4.8.5
 
-This runs docker-compose up in detached mode, pulls the needed Docker images, and starts the wordpress and database containers, as shown in the example below.
+before_install:
+  # Install helper scripts
+  - composer global require --prefer-dist "typisttech/travis-nginx-wordpress:^1.0.0"
+  - export PATH=$HOME/.composer/vendor/bin:$PATH
+  - tnw-install-nginx
+  - tnw-install-wordpress
+  - tnw-prepare-codeception
 
-$ docker-compose up -d
-Creating network "my_wordpress_default" with the default driver
-Pulling db (mysql:5.7)...
-5.7: Pulling from library/mysql
-efd26ecc9548: Pull complete
-a3ed95caeb02: Pull complete
-...
-Digest: sha256:34a0aca88e85f2efa5edff1cea77cf5d3147ad93545dbec99cfe705b03c520de
-Status: Downloaded newer image for mysql:5.7
-Pulling wordpress (wordpress:latest)...
-latest: Pulling from library/wordpress
-efd26ecc9548: Already exists
-a3ed95caeb02: Pull complete
-589a9d9a7c64: Pull complete
-...
-Digest: sha256:ed28506ae44d5def89075fd5c01456610cd6c64006addfe5210b8c675881aff6
-Status: Downloaded newer image for wordpress:latest
-Creating my_wordpress_db_1
-Creating my_wordpress_wordpress_1
-Note: WordPress Multisite works only on ports 80 and/or 443. If you get an error message about binding 0.0.0.0 to port 80 or 443 (depending on which one you specified), it is likely that the port you configured for WordPress is already in use by another service.
+install:
+  # Build the test suites
+  - cd $TRAVIS_BUILD_DIR
+  - composer install -n --prefer-dist
+  - vendor/bin/codecept build -n
 
-Bring up WordPress in a web browser
-At this point, WordPress should be running on port 8000 of your Docker Host, and you can complete the “famous five-minute installation” as a WordPress administrator.
+script:
+	# Run the tests
+  - cd $TRAVIS_BUILD_DIR
+  - vendor/bin/codecept run -n --coverage --coverage-xml
 
-Note: The WordPress site is not immediately available on port 8000 because the containers are still being initialized and may take a couple of minutes before the first load.
+after_script:
+ - tnw-upload-coverage-to-scrutinizer
+ - tnw-upload-coverage-to-codecov
 
-If you are using Docker Machine, you can run the command docker-machine ip MACHINE_VM to get the machine address, and then open http://MACHINE_VM_IP:8000 in a web browser.
+```
 
-If you are using Docker Desktop for Mac or Docker Desktop for Windows, you can use http://localhost as the IP address, and open http://localhost:8000 in a web browser.
+And, this is an basic example of `codeception.dist.yml` which compatible with the above Travis settings:
 
-Choose language for WordPress install
+```
 
-WordPress Welcome
+# codeception.dist.yml
+actor: Tester
+paths:
+  tests: tests
+  log: tests/_output
+  data: tests/_data
+  helpers: tests/_support
+settings:
+  bootstrap: _bootstrap.php
+  colors: true
+  memory_limit: 1024M
+coverage:
+  enabled: true
+  include:
+    - src/my-plugin/*
+  exclude:
+    - src/my-plugin/partials/*
+params: [env] # get parameters from environment vars
+modules:
+  config:
+    WPDb:
+      dsn: 'mysql:host=localhost;dbname=wordpress'
+      user: 'root'
+      password: ''
+      dump: 'tests/_data/dump.sql'
+      url: 'http://wp.dev:8080'
+    WPBrowser:
+      url: 'http://wp.dev:8080'
+      adminUsername: 'admin'
+      adminPassword: 'password'
+      adminPath: '/wp-admin'
+    WordPress:
+      depends: WPDb
+      wpRootFolder: '/tmp/wordpress'
+      adminUsername: 'admin'
+      adminPassword: 'password'
+    WPLoader:
+      wpRootFolder: '/tmp/wordpress'
+      dbName: 'wordpress_int'
+      dbHost: 'localhost'
+      dbUser: 'root'
+      dbPassword: ''
+      tablePrefix: 'int_wp_'
+      domain: 'wordpress.dev'
+      adminEmail: 'admin@wordpress.dev'
+    WPWebDriver:
+      url: 'http://wp.dev:8080'
+      port: 4444
+      window_size: '1024x768'
+      adminUsername: 'admin'
+      adminPassword: 'password'
+      adminPath: '/wp-admin'
+```
 
-Shutdown and cleanup
-The command docker-compose down removes the containers and default network, but preserves your WordPress database.
+## Customization
 
-The command docker-compose down --volumes removes the containers, default network, and the WordPress database.
+The default scripts install WordPress core on `/tmp/wordpress` and serve it at `http://wp.dev:8080`.
+
+You can customize the build via environment variables. Check the variables of the functions in the [bin](./bin) director for available configuration.
+
+## How does it works?
+
+All of the setup scripts are located in the [bin](./bin) directory and template files are in the [tpl](./tpl) directory. They are short and basic so it should be relatively easy to follow. The repository defines 6 setup scripts:
+
+1. `tnw-install-wordpress`
+    - Install WordPress
+1. `tnw-install-nginx`
+    - Setup Nginx to serve a website from a folder on a local domain
+1. `tnw-prepare-codeception`
+    - Install [PHP_CodeSniffer](https://github.com/squizlabs/PHP_CodeSniffer) and [WordPress coding standard](https://github.com/WordPress-Coding-Standards/WordPress-Coding-Standards)
+1. `tnw-upload-coverage-to-codecov`
+    - Upload test coverage to [codecov.io](https://codecov.io)
+1. `tnw-upload-coverage-to-scrutinizer`
+    - Upload test coverage to [Scrutinizer](https://scrutinizer-ci.com)
+
+### WordPress
+
+The WordPress installation is done through the
+[tnw-install-wordpress](./bin/tnw-install-wordpress) bash script. The basic install process goes as follows:
+
+1. Create the WordPress database.
+1. Download WordPress core.
+1. Generate the `wp-config.php` file.
+    - Note that `define( 'AUTOMATIC_UPDATER_DISABLED', true );` is added.
+1. Install the WordPress database.
+
+### Nginx
+
+The Nginx installation is done through the
+[tnw-install-nginx](./bin/tnw-install-nginx) bash script. The basic install process goes as follows:
+
+1. Install Nginx using the [apt addon](https://docs.travis-ci.com/user/installing-dependencies/#Installing-Packages-with-the-APT-Addon) via entries in the [.travis.yml](./.travis.yml) file.
+1. Copy the configuration templates to a new directory while replacing placeholders with environment variables.
+1. Start php-fpm and Nginx with our custom configuration file instead of the default.
+
+### Codeception
+
+The Codeception preparation is done through the
+[tnw-prepare-codeception](./bin/tnw-prepare-codeception) bash script. The basic install process goes as follows:
+
+1. Replace `phantomjs` path to the TravisCI one in `codeception.yml` and `codeception.dist.yml`.
+1. Create an extra database for testing.
+1. Import database dump to WordPress.
+1. Upgrade the WordPress database.
+1. Export the WordPress database dump for later use.
+
+Note: The `phantomjs` path must be wrapped in single quotes.
+
+```
+extensions:
+  enabled:
+    - Codeception\Extension\Phantoman
+  config:
+    Codeception\Extension\Phantoman:
+      path: '/usr/bin/phantomjs'
+      port: 4444
+      suites: ['acceptance']
+```
+
+### Codecov.io
+
+The Codecov.io test coverage uploading is done through the
+[tnw-upload-coverage-to-codecov](./bin/tnw-upload-coverage-to-codecov) bash script. The basic install process goes as follows:
+
+1. Run the [codecov-bash](https://github.com/codecov/codecov-bash) script.
+
+### Scrutinizer CI
+
+The Scrutinizer CI test coverage uploading is done through the
+[tnw-upload-coverage-to-scrutinizer](./bin/tnw-upload-coverage-to-scrutinizer) bash script. The basic install process goes as follows:
+
+1. Download [ocular](https://github.com/scrutinizer-ci/ocular).
+1. Upload the test coverage file to Scrutinizer CI.
+
+## Known Issues
+
+* Nginx gives alert messages during start which is safe to ignore.
+
+	```
+	$ install-nginx
+  [26-Dec-2046 00:00:00] NOTICE: [pool travis] 'user' directive is ignored when FPM is not running as root
+  nginx: [alert] could not open error log file: open() "/var/log/nginx/error.log" failed (13: Permission denied)
+	```
+
+## See Also
+
+* [Running Nginx as a Non-Root User](https://www.exratione.com/2014/03/running-nginx-as-a-non-root-user/)
+* [Travis CI Nginx Test (the original repo)](https://github.com/tburry/travis-nginx-test)
+* [Travis CI Apache Virtualhost configuration script](https://github.com/lucatume/travis-apache-setup)
+
+## Real life examples that use this package
+
+Here you go:
+
+ * [Sunny](https://github.com/Typisttech/sunny)
+ * [WP Cloudflare Guard](https://github.com/TypistTech/wp-cloudflare-guard)
+ * [All those WordPress PHP libraries I made](https://github.com/search?utf8=%E2%9C%93&q=topic%3Awordpress-php-library+org%3ATypistTech&type=Repositories)
+
+*Add your own [here](https://github.com/TypistTech/travis-nginx-wordpress/edit/master/README.md)*
+
+## Support!
+
+### Donate via PayPal [![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://typist.tech/donate/travis-nginx-wordpress/)
+
+Love Travis CI Nginx WordPress Test? Help me maintain Travis CI Nginx WordPress Test, a [donation here](https://typist.tech/donate/travis-nginx-wordpress/) can help with it.
+
+### Why don't you hire me?
+
+Ready to take freelance WordPress jobs. Contact me via the contact form [here](https://typist.tech/contact/) or, via email [info@typist.tech](mailto:info@typist.tech)
+
+### Want to help in other way? Want to be a sponsor?
+
+Contact: [Tang Rufus](mailto:tangrufus@gmail.com)
+
+## Change Log
+
+See [CHANGELOG.md](./CHANGELOG.md).
+
+## Credit
+
+[Travis CI Nginx WordPress Test](https://github.com/TypistTech/travis-nginx-wordpress) is originally forked from the [Travis CI Nginx Test](https://github.com/tburry/travis-nginx-test) project. Special thanks to its author [Todd Burry](https://github.com/tburry).
+
+## License
+
+[Travis CI Nginx WordPress Test](https://github.com/TypistTech/travis-nginx-wordpress) is released under the [MIT License](https://opensource.org/licenses/MIT).
